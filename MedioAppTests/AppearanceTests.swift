@@ -42,25 +42,40 @@ final class AppearanceTests: XCTestCase {
         manager.setAppearance(.light)
         XCTAssertEqual(manager.appearanceMode, .light)
         XCTAssertFalse(manager.effectiveIsDark)
+        XCTAssertEqual(manager.effectiveColorScheme, .light)
+        XCTAssertEqual(manager.effectiveNSAppearance.name, .aqua)
         XCTAssertFalse(manager.isIconDark)
         
         manager.setAppearance(.dark)
         XCTAssertEqual(manager.appearanceMode, .dark)
         XCTAssertTrue(manager.effectiveIsDark)
+        XCTAssertEqual(manager.effectiveColorScheme, .dark)
+        XCTAssertEqual(manager.effectiveNSAppearance.name, .darkAqua)
         XCTAssertTrue(manager.isIconDark)
         
         manager.setAppearance(.auto)
         XCTAssertEqual(manager.appearanceMode, .auto)
         XCTAssertEqual(manager.effectiveIsDark, manager.isSystemDark)
+        XCTAssertEqual(manager.effectiveColorScheme, manager.isSystemDark ? .dark : .light)
         XCTAssertEqual(manager.isIconDark, manager.isSystemDark)
         
-        // Test cycle
+        // Test full cycle rotation: Auto -> Light -> Dark -> Auto
+        manager.setAppearance(.auto)
         manager.cycleAppearance() // auto -> light
         XCTAssertEqual(manager.appearanceMode, .light)
+        XCTAssertFalse(manager.effectiveIsDark)
+        XCTAssertEqual(manager.effectiveColorScheme, .light)
+        
         manager.cycleAppearance() // light -> dark
         XCTAssertEqual(manager.appearanceMode, .dark)
+        XCTAssertTrue(manager.effectiveIsDark)
+        XCTAssertEqual(manager.effectiveColorScheme, .dark)
+        
         manager.cycleAppearance() // dark -> auto
         XCTAssertEqual(manager.appearanceMode, .auto)
+        // When rotated back to auto, must reflect isSystemDark!
+        XCTAssertEqual(manager.effectiveIsDark, manager.isSystemDark)
+        XCTAssertEqual(manager.effectiveColorScheme, manager.isSystemDark ? .dark : .light)
     }
     
     func testIconLoading() {

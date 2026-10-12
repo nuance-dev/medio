@@ -10,8 +10,8 @@ struct MedioApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(appearanceManager.appearanceMode.colorScheme)
-                .background(WindowAccessor(appearanceMode: appearanceManager.appearanceMode))
+                .preferredColorScheme(appearanceManager.effectiveColorScheme)
+                .background(WindowAccessor(appearance: appearanceManager.effectiveNSAppearance))
                 .sheet(isPresented: $showingUpdateSheet) {
                     MenuBarView(updater: updater)
                 }

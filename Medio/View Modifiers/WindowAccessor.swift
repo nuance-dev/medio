@@ -2,14 +2,14 @@ import SwiftUI
 import AppKit
 
 struct WindowAccessor: NSViewRepresentable {
-    var appearanceMode: AppearanceMode
+    var appearance: NSAppearance
     
     func makeNSView(context: Context) -> NSView {
         let nsView = NSView()
         
         DispatchQueue.main.async {
             if let window = nsView.window {
-                window.appearance = appearanceMode.nsAppearance
+                window.appearance = appearance
                 
                 // Avoid adding duplicate accessories
                 let alreadyHasAccessory = window.titlebarAccessoryViewControllers.contains { controller in
@@ -34,7 +34,7 @@ struct WindowAccessor: NSViewRepresentable {
     
     func updateNSView(_ nsView: NSView, context: Context) {
         if let window = nsView.window {
-            window.appearance = appearanceMode.nsAppearance
+            window.appearance = appearance
         }
     }
 }

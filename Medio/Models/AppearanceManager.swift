@@ -21,6 +21,7 @@ final class AppearanceManager: ObservableObject {
     private var darkIconCache: NSImage?
     private var lightIconCache: NSImage?
     private var observers: [Any] = []
+    private var cancellables = Set<AnyCancellable>()
     
     init() {
         if let savedMode = UserDefaults.standard.string(forKey: appearanceKey),
@@ -40,15 +41,20 @@ final class AppearanceManager: ObservableObject {
             NotificationCenter.default.removeObserver(observer)
             DistributedNotificationCenter.default().removeObserver(observer)
         }
+        cancellables.removeAll()
     }
     
     // MARK: - System Appearance Detection
     
     static func detectSystemIsDark() -> Bool {
-        if let style = UserDefaults.standard.string(forKey: "AppleInterfaceStyle") {
+        CFPreferencesAppSynchronize(kCFPreferencesAnyApplication)
+        if let style = CFPreferencesCopyAppValue("AppleInterfaceStyle" as CFString, kCFPreferencesAnyApplication) as? String {
             return style.caseInsensitiveCompare("dark") == .orderedSame
         }
-        return NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        if NSApplication.shared.appearance == nil {
+            return NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        }
+        return false
     }
     
     private func setupObservers() {
@@ -71,6 +77,14 @@ final class AppearanceManager: ObservableObject {
             self?.refreshSystemAppearance()
         }
         observers.append(appActiveObserver)
+        
+        // Observe effectiveAppearance on NSApplication
+        NSApplication.shared.publisher(for: \.effectiveAppearance)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshSystemAppearance()
+            }
+            .store(in: &cancellables)
     }
     
     func refreshSystemAppearance() {
@@ -92,6 +106,14 @@ final class AppearanceManager: ObservableObject {
         case .dark:
             return true
         }
+    }
+    
+    var effectiveColorScheme: ColorScheme {
+        return effectiveIsDark ? .dark : .light
+    }
+    
+    var effectiveNSAppearance: NSAppearance {
+        return effectiveIsDark ? (NSAppearance(named: .darkAqua) ?? NSAppearance.currentDrawing()) : (NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing())
     }
     
     var isIconDark: Bool {
@@ -171,7 +193,7 @@ final class AppearanceManager: ObservableObject {
             return image
         }
         
-        // 3. Fallback: dynamically generate dark icon from light icon
+        // 3. Fallback: dynamically generate clean dark icon from light icon
         if let lightIcon = loadLightIcon(),
            let generated = generateDarkIcon(from: lightIcon) {
             darkIconCache = generated
@@ -224,7 +246,7 @@ final class AppearanceManager: ObservableObject {
             for x in 0..<width {
                 guard let c = rep.colorAt(x: x, y: y) else { continue }
                 let a = c.alphaComponent
-                if a < 0.01 {
+                if a < 0.005 {
                     outRep.setColor(NSColor(calibratedRed: 0, green: 0, blue: 0, alpha: 0), atX: x, y: y)
                     continue
                 }
@@ -234,20 +256,21 @@ final class AppearanceManager: ObservableObject {
                 let b = c.blueComponent
                 
                 let minC = min(r, min(g, b))
-                let glyphFactor: CGFloat
-                if minC >= 0.92 {
-                    glyphFactor = 0.0
-                } else if minC <= 0.70 {
-                    glyphFactor = 1.0
+                let maxC = max(r, max(g, b))
+                let sat = maxC > 0.001 ? (maxC - minC) / maxC : 0
+                
+                if sat <= 0.20 {
+                    // Background & rim: pure black with natural alpha, zero glow
+                    outRep.setColor(NSColor(calibratedRed: 0, green: 0, blue: 0, alpha: a), atX: x, y: y)
+                } else if sat >= 0.32 {
+                    // Crisp, vibrant glyph
+                    outRep.setColor(NSColor(calibratedRed: r, green: g, blue: b, alpha: a), atX: x, y: y)
                 } else {
-                    glyphFactor = (0.92 - minC) / (0.92 - 0.70)
+                    // Smooth antialiasing between glyph edge and black background
+                    let t = (sat - 0.20) / (0.32 - 0.20)
+                    let factor = t * t * (3.0 - 2.0 * t)
+                    outRep.setColor(NSColor(calibratedRed: r * factor, green: g * factor, blue: b * factor, alpha: a), atX: x, y: y)
                 }
-                
-                let darkR = r * glyphFactor
-                let darkG = g * glyphFactor
-                let darkB = b * glyphFactor
-                
-                outRep.setColor(NSColor(calibratedRed: darkR, green: darkG, blue: darkB, alpha: a), atX: x, y: y)
             }
         }
         
