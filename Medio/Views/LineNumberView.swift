@@ -87,6 +87,17 @@ class LineNumberView: NSView {
 
         // Enumerate through each line in the visible range
         let nsString = content as NSString
+        if nsString.length == 0 {
+            let lineNumberString = "1"
+            let stringSize = (lineNumberString as NSString).size(withAttributes: attributes)
+            let xPosition = self.bounds.width - stringSize.width - 8
+            let yPosition = textView.textContainerInset.height - visibleRect.origin.y
+            (lineNumberString as NSString).draw(
+                at: NSPoint(x: xPosition, y: yPosition),
+                withAttributes: attributes
+            )
+            return
+        }
         var lineNumber = nsString.substring(to: characterRange.location).components(separatedBy: .newlines).count
         if lineNumber == 0 {
             lineNumber = 1
