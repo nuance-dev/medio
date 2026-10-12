@@ -18,27 +18,13 @@ struct TitleBarAccessory: View {
         .buttonStyle(PlainButtonStyle())
         .help("Appearance: \(appearanceManager.appearanceMode.title) (Click to switch)")
         .contextMenu {
-            Button(action: { appearanceManager.setAppearance(.auto) }) {
-                HStack {
-                    Text("Auto (System)")
-                    if appearanceManager.appearanceMode == .auto {
-                        Image(systemName: "checkmark")
-                    }
-                }
-            }
-            Button(action: { appearanceManager.setAppearance(.light) }) {
-                HStack {
-                    Text("Light")
-                    if appearanceManager.appearanceMode == .light {
-                        Image(systemName: "checkmark")
-                    }
-                }
-            }
-            Button(action: { appearanceManager.setAppearance(.dark) }) {
-                HStack {
-                    Text("Dark")
-                    if appearanceManager.appearanceMode == .dark {
-                        Image(systemName: "checkmark")
+            ForEach(AppearanceMode.allCases) { mode in
+                Button(action: { appearanceManager.setAppearance(mode) }) {
+                    HStack {
+                        Text(mode.title)
+                        if appearanceManager.appearanceMode == mode {
+                            Image(systemName: "checkmark")
+                        }
                     }
                 }
             }

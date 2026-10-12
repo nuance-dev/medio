@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import Combine
 
 final class AppearanceManager: ObservableObject {
     static let shared = AppearanceManager()
@@ -18,264 +17,83 @@ final class AppearanceManager: ObservableObject {
     
     @Published private(set) var isSystemDark: Bool = false
     
-    private var darkIconCache: NSImage?
-    private var lightIconCache: NSImage?
-    private var observers: [Any] = []
-    private var cancellables = Set<AnyCancellable>()
-    
     init() {
-        if let savedMode = UserDefaults.standard.string(forKey: appearanceKey),
-           let mode = AppearanceMode(rawValue: savedMode) {
-            self.appearanceMode = mode
-        } else {
-            self.appearanceMode = .auto
-        }
-        
+        let saved = UserDefaults.standard.string(forKey: appearanceKey)
+        self.appearanceMode = saved.flatMap(AppearanceMode.init) ?? .auto
         self.isSystemDark = AppearanceManager.detectSystemIsDark()
         setupObservers()
         updateAppearance()
     }
-    
-    deinit {
-        for observer in observers {
-            NotificationCenter.default.removeObserver(observer)
-            DistributedNotificationCenter.default().removeObserver(observer)
-        }
-        cancellables.removeAll()
-    }
-    
-    // MARK: - System Appearance Detection
     
     static func detectSystemIsDark() -> Bool {
         CFPreferencesAppSynchronize(kCFPreferencesAnyApplication)
         if let style = CFPreferencesCopyAppValue("AppleInterfaceStyle" as CFString, kCFPreferencesAnyApplication) as? String {
             return style.caseInsensitiveCompare("dark") == .orderedSame
         }
-        if NSApplication.shared.appearance == nil {
-            return NSApplication.shared.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        }
         return false
     }
     
     private func setupObservers() {
-        // Observe macOS system theme changes (Light <-> Dark mode toggles)
-        let distObserver = DistributedNotificationCenter.default().addObserver(
+        DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name("AppleInterfaceThemeChangedNotification"),
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.refreshSystemAppearance()
-        }
-        observers.append(distObserver)
+            object: nil, queue: .main
+        ) { [weak self] _ in self?.refreshSystemAppearance() }
         
-        // Refresh when app becomes active
-        let appActiveObserver = NotificationCenter.default.addObserver(
+        NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.refreshSystemAppearance()
-        }
-        observers.append(appActiveObserver)
-        
-        // Observe effectiveAppearance on NSApplication
-        NSApplication.shared.publisher(for: \.effectiveAppearance)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                self?.refreshSystemAppearance()
-            }
-            .store(in: &cancellables)
+            object: nil, queue: .main
+        ) { [weak self] _ in self?.refreshSystemAppearance() }
     }
     
     func refreshSystemAppearance() {
-        let systemDark = AppearanceManager.detectSystemIsDark()
-        if self.isSystemDark != systemDark {
-            self.isSystemDark = systemDark
-        }
+        let dark = AppearanceManager.detectSystemIsDark()
+        if isSystemDark != dark { isSystemDark = dark }
         updateAppearance()
     }
     
-    // MARK: - Appearance Logic
-    
     var effectiveIsDark: Bool {
-        switch appearanceMode {
-        case .auto:
-            return isSystemDark
-        case .light:
-            return false
-        case .dark:
-            return true
-        }
+        appearanceMode == .auto ? isSystemDark : (appearanceMode == .dark)
     }
     
     var effectiveColorScheme: ColorScheme {
-        return effectiveIsDark ? .dark : .light
+        effectiveIsDark ? .dark : .light
     }
     
     var effectiveNSAppearance: NSAppearance {
-        return effectiveIsDark ? (NSAppearance(named: .darkAqua) ?? NSAppearance.currentDrawing()) : (NSAppearance(named: .aqua) ?? NSAppearance.currentDrawing())
+        NSAppearance(named: effectiveIsDark ? .darkAqua : .aqua) ?? .currentDrawing()
     }
     
-    var isIconDark: Bool {
-        switch appearanceMode {
-        case .auto:
-            return isSystemDark
-        case .light:
-            return false
-        case .dark:
-            return true
-        }
-    }
+    var isIconDark: Bool { effectiveIsDark }
     
-    func cycleAppearance() {
-        appearanceMode = appearanceMode.next
-    }
-    
-    func setAppearance(_ mode: AppearanceMode) {
-        appearanceMode = mode
-    }
+    func cycleAppearance() { appearanceMode = appearanceMode.next }
+    func setAppearance(_ mode: AppearanceMode) { appearanceMode = mode }
     
     func updateAppearance() {
-        // Sync legacy key
         UserDefaults.standard.set(effectiveIsDark, forKey: legacyDarkModeKey)
-        
-        // Update dock icon
         updateAppIcon()
-        
-        // Post notification so AppKit views can update if needed
         NotificationCenter.default.post(name: AppearanceManager.appearanceDidChangeNotification, object: nil)
     }
     
-    // MARK: - Icon Management
-    
     var currentIcon: NSImage {
-        if isIconDark {
-            return loadDarkIcon() ?? loadLightIcon() ?? NSImage()
-        } else {
-            return loadLightIcon() ?? NSImage()
-        }
+        (isIconDark ? loadDarkIcon() : loadLightIcon()) ?? NSImage()
     }
     
     func loadLightIcon() -> NSImage? {
-        if let cached = lightIconCache {
-            return cached
-        }
-        
-        if let bundleIcon = NSImage(named: NSImage.applicationIconName) {
-            lightIconCache = bundleIcon
-            return bundleIcon
-        }
-        
-        if let icon = Bundle.main.image(forResource: NSImage.applicationIconName) {
-            lightIconCache = icon
-            return icon
-        }
-        
-        let wsIcon = NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
-        lightIconCache = wsIcon
-        return wsIcon
+        NSImage(named: NSImage.applicationIconName) ?? Bundle.main.image(forResource: NSImage.applicationIconName) ?? NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
     }
     
     func loadDarkIcon() -> NSImage? {
-        if let cached = darkIconCache {
-            return cached
-        }
-        
-        // 1. Try named asset
-        if let image = NSImage(named: "AppIconDark") {
-            darkIconCache = image
-            return image
-        }
-        
-        // 2. Try bundle resource
-        if let image = Bundle.main.image(forResource: "AppIconDark") {
-            darkIconCache = image
-            return image
-        }
-        
-        // 3. Fallback: dynamically generate clean dark icon from light icon
-        if let lightIcon = loadLightIcon(),
-           let generated = generateDarkIcon(from: lightIcon) {
-            darkIconCache = generated
-            return generated
-        }
-        
-        return nil
+        NSImage(named: "AppIconDark") ?? Bundle.main.image(forResource: "AppIconDark")
     }
     
     private func updateAppIcon() {
-        if isIconDark {
-            if let dark = loadDarkIcon() {
-                NSApplication.shared.applicationIconImage = dark
-            }
-        } else {
-            if let light = loadLightIcon() {
-                NSApplication.shared.applicationIconImage = light
-            } else {
-                NSApplication.shared.applicationIconImage = nil
-            }
-        }
-    }
-    
-    private func generateDarkIcon(from image: NSImage) -> NSImage? {
-        guard let tiff = image.tiffRepresentation,
-              let rep = NSBitmapImageRep(data: tiff) else {
-            return nil
-        }
+        let darkIcon = loadDarkIcon()
+        let lightIcon = loadLightIcon()
         
-        let width = rep.pixelsWide
-        let height = rep.pixelsHigh
-        guard width > 0, height > 0 else { return nil }
+        // 1. Update live Dock icon tile
+        NSApplication.shared.applicationIconImage = isIconDark ? darkIcon : nil
         
-        guard let outRep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: width,
-            pixelsHigh: height,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .calibratedRGB,
-            bytesPerRow: width * 4,
-            bitsPerPixel: 32
-        ) else {
-            return nil
-        }
-        
-        for y in 0..<height {
-            for x in 0..<width {
-                guard let c = rep.colorAt(x: x, y: y) else { continue }
-                let a = c.alphaComponent
-                if a < 0.005 {
-                    outRep.setColor(NSColor(calibratedRed: 0, green: 0, blue: 0, alpha: 0), atX: x, y: y)
-                    continue
-                }
-                
-                let r = c.redComponent
-                let g = c.greenComponent
-                let b = c.blueComponent
-                
-                let minC = min(r, min(g, b))
-                let maxC = max(r, max(g, b))
-                let sat = maxC > 0.001 ? (maxC - minC) / maxC : 0
-                
-                if sat <= 0.20 {
-                    // Background & rim: pure black with natural alpha, zero glow
-                    outRep.setColor(NSColor(calibratedRed: 0, green: 0, blue: 0, alpha: a), atX: x, y: y)
-                } else if sat >= 0.32 {
-                    // Crisp, vibrant glyph
-                    outRep.setColor(NSColor(calibratedRed: r, green: g, blue: b, alpha: a), atX: x, y: y)
-                } else {
-                    // Smooth antialiasing between glyph edge and black background
-                    let t = (sat - 0.20) / (0.32 - 0.20)
-                    let factor = t * t * (3.0 - 2.0 * t)
-                    outRep.setColor(NSColor(calibratedRed: r * factor, green: g * factor, blue: b * factor, alpha: a), atX: x, y: y)
-                }
-            }
-        }
-        
-        let result = NSImage(size: image.size)
-        result.addRepresentation(outRep)
-        return result
+        // 2. Update Finder file bundle icon (affects Finder views & Get Info)
+        _ = NSWorkspace.shared.setIcon(isIconDark ? darkIcon : nil, forFile: Bundle.main.bundlePath, options: [])
     }
 }
