@@ -2,19 +2,10 @@ import SwiftUI
 import AppKit
 
 enum AppearanceMode: String, CaseIterable, Identifiable, Codable {
-    case auto = "auto"
-    case light = "light"
-    case dark = "dark"
+    case auto = "auto", light = "light", dark = "dark"
     
     var id: String { rawValue }
-    
-    var title: String {
-        switch self {
-        case .auto: return "Auto"
-        case .light: return "Light"
-        case .dark: return "Dark"
-        }
-    }
+    var title: String { rawValue.capitalized }
     
     var iconName: String {
         switch self {
@@ -25,19 +16,11 @@ enum AppearanceMode: String, CaseIterable, Identifiable, Codable {
     }
     
     var colorScheme: ColorScheme? {
-        switch self {
-        case .auto: return nil
-        case .light: return .light
-        case .dark: return .dark
-        }
+        self == .auto ? nil : (self == .dark ? .dark : .light)
     }
     
     var nsAppearance: NSAppearance? {
-        switch self {
-        case .auto: return nil
-        case .light: return NSAppearance(named: .aqua)
-        case .dark: return NSAppearance(named: .darkAqua)
-        }
+        self == .auto ? nil : NSAppearance(named: self == .dark ? .darkAqua : .aqua)
     }
     
     var next: AppearanceMode {

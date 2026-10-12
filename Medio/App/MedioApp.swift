@@ -56,20 +56,10 @@ struct MedioApp: App {
             }
             
             CommandMenu("Appearance") {
-                Button("Auto (System)") {
-                    appearanceManager.setAppearance(.auto)
+                ForEach(Array(AppearanceMode.allCases.enumerated()), id: \.element.id) { index, mode in
+                    Button(mode.title) { appearanceManager.setAppearance(mode) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: [.command, .option])
                 }
-                .keyboardShortcut("0", modifiers: [.command, .option])
-                
-                Button("Light") {
-                    appearanceManager.setAppearance(.light)
-                }
-                .keyboardShortcut("1", modifiers: [.command, .option])
-                
-                Button("Dark") {
-                    appearanceManager.setAppearance(.dark)
-                }
-                .keyboardShortcut("2", modifiers: [.command, .option])
             }
         }
     }
