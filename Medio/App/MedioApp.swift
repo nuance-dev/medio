@@ -29,6 +29,14 @@ struct MedioApp: App {
         }
         .windowStyle(HiddenTitleBarWindowStyle())
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Medio") {
+                    NSApplication.shared.orderFrontStandardAboutPanel([
+                        NSApplication.AboutPanelOptionKey.applicationIcon: AppearanceManager.shared.currentIcon
+                    ])
+                }
+            }
+            
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates...") {
                     showingUpdateSheet = true
