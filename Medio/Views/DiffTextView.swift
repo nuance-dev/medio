@@ -22,6 +22,10 @@ struct DiffTextView: NSViewRepresentable {
         let textView = CustomTextView()
 
         // Configure text view
+        let shouldShowPlaceholder = text.isEmpty && comparisonText.isEmpty
+        if shouldShowPlaceholder {
+            textView.placeholderAttributedString = DiffTextView.createPlaceholderAttributedString(for: side)
+        }
         textView.allowsUndo = true
         textView.delegate = context.coordinator
         textView.isEditable = true
@@ -73,12 +77,21 @@ struct DiffTextView: NSViewRepresentable {
             name: DiffTextView.textDidChangeNotification,
             object: nil
         )
+        DistributedNotificationCenter.default().addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.handleThemeChange(_:)),
+            name: NSNotification.Name("AppleInterfaceThemeChangedNotification"),
+            object: nil
+        )
 
         return containerView
     }
 
     func updateNSView(_ containerView: NSView, context: Context) {
+        context.coordinator.parent = self
         guard let textView = context.coordinator.textView else { return }
+
+        updatePlaceholder(in: textView, currentText: text, currentComparisonText: comparisonText)
 
         if !context.coordinator.isEditing && textView.string != text {
             let selectedRange = textView.selectedRange()
@@ -89,7 +102,27 @@ struct DiffTextView: NSViewRepresentable {
         }
     }
 
+    func updatePlaceholder(in textView: NSTextView, currentText: String, currentComparisonText: String) {
+        guard let customTextView = textView as? CustomTextView else { return }
+        let shouldShow = currentText.isEmpty && currentComparisonText.isEmpty
+        if shouldShow {
+            if customTextView.placeholderAttributedString == nil {
+                customTextView.placeholderAttributedString = DiffTextView.createPlaceholderAttributedString(for: side)
+            }
+        } else {
+            if customTextView.placeholderAttributedString != nil {
+                customTextView.placeholderAttributedString = nil
+            }
+        }
+    }
+
     private func highlightDifferences(in textView: NSTextView) {
+        if text.isEmpty {
+            textView.textStorage?.setAttributedString(NSAttributedString())
+            textView.needsDisplay = true
+            return
+        }
+
         let attributedString = NSMutableAttributedString(string: text)
         let fullRange = NSRange(location: 0, length: text.utf16.count)
 
@@ -129,6 +162,52 @@ struct DiffTextView: NSViewRepresentable {
         textView.textStorage?.setAttributedString(attributedString)
     }
 
+    static func createPlaceholderAttributedString(for side: DiffSide) -> NSAttributedString {
+        let leftPlaceholder = "This is some text on the left side"
+        let rightPlaceholder = "This is some new text on the right side"
+
+        let placeholderText = side == .left ? leftPlaceholder : rightPlaceholder
+        let comparisonPlaceholder = side == .left ? rightPlaceholder : leftPlaceholder
+
+        let attributedString = NSMutableAttributedString(string: placeholderText)
+        let fullRange = NSRange(location: 0, length: placeholderText.utf16.count)
+
+        attributedString.addAttributes([
+            .foregroundColor: NSColor.placeholderTextColor,
+            .font: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        ], range: fullRange)
+
+        let analyzer = DiffAnalyzer(sourceText: placeholderText, targetText: comparisonPlaceholder)
+        let diffs = analyzer.computeDifferences()
+
+        for lineDiff in diffs {
+            guard lineDiff.range.location + lineDiff.range.length <= placeholderText.utf16.count else { continue }
+
+            if lineDiff.isDifferent {
+                let backgroundColor = side == .left ?
+                    NSColor.systemRed.withAlphaComponent(0.12) :
+                    NSColor.systemGreen.withAlphaComponent(0.12)
+
+                attributedString.addAttribute(.backgroundColor, value: backgroundColor, range: lineDiff.range)
+
+                for wordDiff in lineDiff.wordDiffs {
+                    guard wordDiff.range.location + wordDiff.range.length <= placeholderText.utf16.count else { continue }
+
+                    let foregroundColor = side == .left ?
+                        NSColor.systemRed.withAlphaComponent(0.65) :
+                        NSColor(calibratedRed: 0, green: 0.6, blue: 0, alpha: 0.65)
+
+                    attributedString.addAttributes([
+                        .foregroundColor: foregroundColor,
+                        .backgroundColor: backgroundColor
+                    ], range: wordDiff.range)
+                }
+            }
+        }
+
+        return attributedString
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
@@ -165,7 +244,10 @@ struct DiffTextView: NSViewRepresentable {
             NotificationCenter.default.post(
                 name: DiffTextView.textDidChangeNotification,
                 object: nil,
-                userInfo: ["side": parent.side]
+                userInfo: [
+                    "side": parent.side,
+                    "text": textView.string
+                ]
             )
         }
 
@@ -173,11 +255,24 @@ struct DiffTextView: NSViewRepresentable {
             guard let userInfo = notification.userInfo,
                   let side = userInfo["side"] as? DiffSide,
                   side != parent.side,
+                  let otherText = userInfo["text"] as? String,
                   let textView = self.textView else { return }
 
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
+                self.parent.comparisonText = otherText
+                self.parent.updatePlaceholder(in: textView, currentText: self.parent.text, currentComparisonText: otherText)
                 self.parent.highlightDifferences(in: textView)
+            }
+        }
+
+        @objc func handleThemeChange(_ notification: Notification) {
+            guard let textView = self.textView else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.parent.updatePlaceholder(in: textView, currentText: self.parent.text, currentComparisonText: self.parent.comparisonText)
+                self.parent.highlightDifferences(in: textView)
+                self.lineNumbersView?.needsDisplay = true
             }
         }
 
@@ -188,6 +283,7 @@ struct DiffTextView: NSViewRepresentable {
             let visibleRect = textView.visibleRect
 
             parent.text = textView.string
+            parent.updatePlaceholder(in: textView, currentText: textView.string, currentComparisonText: parent.comparisonText)
 
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }

@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 
 struct ContentView: View {
-    @State private var leftText = "This is some text on the left side"
-    @State private var rightText = "This is some new text on the right side"
+    @State private var leftText = ""
+    @State private var rightText = ""
     
     var body: some View {
         ZStack {
