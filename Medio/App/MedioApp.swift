@@ -3,19 +3,21 @@ import AppKit
 
 @main
 struct MedioApp: App {
-    @AppStorage("isDarkMode") private var isDarkMode = false
+    @StateObject private var appearanceManager = AppearanceManager.shared
     @StateObject private var updater = UpdateChecker()
     @State private var showingUpdateSheet = false
     
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(isDarkMode ? .dark : .light)
-                .background(WindowAccessor())
+                .preferredColorScheme(appearanceManager.appearanceMode.colorScheme)
+                .background(WindowAccessor(appearanceMode: appearanceManager.appearanceMode))
                 .sheet(isPresented: $showingUpdateSheet) {
                     MenuBarView(updater: updater)
                 }
                 .onAppear {
+                    appearanceManager.updateAppearance()
+                    
                     // Check for updates when app launches
                     updater.checkForUpdates()
                     
@@ -44,6 +46,23 @@ struct MedioApp: App {
                 
                 Divider()
             }
+            
+            CommandMenu("Appearance") {
+                Button("Auto (System)") {
+                    appearanceManager.setAppearance(.auto)
+                }
+                .keyboardShortcut("0", modifiers: [.command, .option])
+                
+                Button("Light") {
+                    appearanceManager.setAppearance(.light)
+                }
+                .keyboardShortcut("1", modifiers: [.command, .option])
+                
+                Button("Dark") {
+                    appearanceManager.setAppearance(.dark)
+                }
+                .keyboardShortcut("2", modifiers: [.command, .option])
+            }
         }
     }
 }
@@ -52,7 +71,7 @@ struct MedioApp: App {
 struct MedioApp_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
-            .preferredColorScheme(.light) // Change to .dark for dark mode preview
+            .preferredColorScheme(nil)
             .environmentObject(UpdateChecker())
     }
 }

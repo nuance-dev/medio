@@ -73,6 +73,12 @@ struct DiffTextView: NSViewRepresentable {
             name: DiffTextView.textDidChangeNotification,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            context.coordinator,
+            selector: #selector(Coordinator.handleAppearanceChange(_:)),
+            name: AppearanceManager.appearanceDidChangeNotification,
+            object: nil
+        )
 
         return containerView
     }
@@ -178,6 +184,15 @@ struct DiffTextView: NSViewRepresentable {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 self.parent.highlightDifferences(in: textView)
+            }
+        }
+
+        @objc func handleAppearanceChange(_ notification: Notification) {
+            guard let textView = self.textView else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.parent.highlightDifferences(in: textView)
+                self.lineNumbersView?.needsDisplay = true
             }
         }
 
