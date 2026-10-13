@@ -3,13 +3,11 @@ import AppKit
 
 struct MenuBarView: View {
     @ObservedObject var updater: UpdateChecker
+    @ObservedObject private var appearanceManager = AppearanceManager.shared
     @Environment(\.dismiss) var dismiss
     
     private var appIcon: NSImage {
-        if let bundleIcon = NSImage(named: NSImage.applicationIconName) {
-            return bundleIcon
-        }
-        return NSWorkspace.shared.icon(forFile: Bundle.main.bundlePath)
+        appearanceManager.currentIcon
     }
     
     var body: some View {
