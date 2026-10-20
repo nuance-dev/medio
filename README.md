@@ -10,7 +10,7 @@ Because the world really needed another diff checker.
 
 - **Real-time Comparison**: See differences instantly as you type
 - **Smart Diff Detection**: Intelligent word-level difference highlighting
-- **Dark and Light modes**: Of course
+- **Auto, Dark and Light modes**: Seamlessly adapts to your system theme with a trinary switcher and appearance-aware icon
 - **Native Performance**: Built with SwiftUI and AppKit for optimal performance
 
 ![42115](https://github.com/user-attachments/assets/d4a202c5-a160-4a66-a7c7-dad346de86a3)

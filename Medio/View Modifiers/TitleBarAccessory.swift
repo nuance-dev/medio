@@ -1,16 +1,33 @@
 import SwiftUI
 
 struct TitleBarAccessory: View {
-    @AppStorage("isDarkMode") private var isDarkMode = false
+    @ObservedObject private var appearanceManager = AppearanceManager.shared
     
     var body: some View {
         Button(action: {
-            isDarkMode.toggle()
+            withAnimation(.easeInOut(duration: 0.15)) {
+                appearanceManager.cycleAppearance()
+            }
         }) {
-            Image(systemName: isDarkMode ? "sun.max.fill" : "moon.fill")
+            Image(systemName: appearanceManager.appearanceMode.iconName)
+                .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.primary)
+                .frame(width: 30, height: 30)
+                .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
-        .frame(width: 30, height: 30)
+        .help("Appearance: \(appearanceManager.appearanceMode.title) (Click to switch)")
+        .contextMenu {
+            ForEach(AppearanceMode.allCases) { mode in
+                Button(action: { appearanceManager.setAppearance(mode) }) {
+                    HStack {
+                        Text(mode.title)
+                        if appearanceManager.appearanceMode == mode {
+                            Image(systemName: "checkmark")
+                        }
+                    }
+                }
+            }
+        }
     }
 }

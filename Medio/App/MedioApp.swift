@@ -3,19 +3,21 @@ import AppKit
 
 @main
 struct MedioApp: App {
-    @AppStorage("isDarkMode") private var isDarkMode = false
+    @StateObject private var appearanceManager = AppearanceManager.shared
     @StateObject private var updater = UpdateChecker()
     @State private var showingUpdateSheet = false
     
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .preferredColorScheme(isDarkMode ? .dark : .light)
-                .background(WindowAccessor())
+                .preferredColorScheme(appearanceManager.effectiveColorScheme)
+                .background(WindowAccessor(appearance: appearanceManager.effectiveNSAppearance))
                 .sheet(isPresented: $showingUpdateSheet) {
                     MenuBarView(updater: updater)
                 }
                 .onAppear {
+                    appearanceManager.updateAppearance()
+                    
                     // Check for updates when app launches
                     updater.checkForUpdates()
                     
@@ -27,6 +29,14 @@ struct MedioApp: App {
         }
         .windowStyle(HiddenTitleBarWindowStyle())
         .commands {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Medio") {
+                    NSApplication.shared.orderFrontStandardAboutPanel([
+                        NSApplication.AboutPanelOptionKey.applicationIcon: AppearanceManager.shared.currentIcon
+                    ])
+                }
+            }
+            
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates...") {
                     showingUpdateSheet = true
@@ -44,6 +54,13 @@ struct MedioApp: App {
                 
                 Divider()
             }
+            
+            CommandMenu("Appearance") {
+                ForEach(Array(AppearanceMode.allCases.enumerated()), id: \.element.id) { index, mode in
+                    Button(mode.title) { appearanceManager.setAppearance(mode) }
+                        .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: [.command, .option])
+                }
+            }
         }
     }
 }
@@ -52,7 +69,7 @@ struct MedioApp: App {
 struct MedioApp_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
-            .preferredColorScheme(.light) // Change to .dark for dark mode preview
+            .preferredColorScheme(nil)
             .environmentObject(UpdateChecker())
     }
 }
